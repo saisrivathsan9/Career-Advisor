@@ -8,7 +8,7 @@ import os
 load_dotenv()
 
 # Initialize OpenAI client with API key
-client = OpenAI(api_key=os.getenv("API_KEY"))
+client = OpenAI(api_key=os.environ.get("API_KEY"))
 
 st.set_page_config(page_title="Career Chat", layout="wide")
 
