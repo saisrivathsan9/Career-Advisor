@@ -12,18 +12,28 @@ client = OpenAI(api_key=os.environ.get("API_KEY"))
 
 st.set_page_config(page_title="Career Chat", layout="wide")
 
+
 # Function to handle user input
 def handle_input():
     user_message = st.session_state.input_box.strip()
     if user_message:
+        # Append the user's message to the chat history
+        st.session_state.chat_history.append(("You", user_message))
+        
+        # Display a temporary "Thinking..." message
+        thinking_placeholder = st.empty()
+        thinking_placeholder.markdown("**Advisor:** Thinking... 🤔")
+
+        # Process the user input to get the AI's response
         ai_response = process_user_input(user_message)
 
-        # Append user input and AI response to chat history
-        st.session_state.chat_history.append(("You", user_message))
+        # Replace the "Thinking..." message with the AI's actual response
+        thinking_placeholder.empty()
         st.session_state.chat_history.append(("Advisor", ai_response))
 
         # Clear the input box
         st.session_state.input_box = ""
+
 
 # Function to clear the chat history
 def clear_chat():
