@@ -46,6 +46,8 @@ def clear_chat():
          "Type your message below to get started! 🚀")
     ]
 
+
+
 def main():
     reset = True
 
@@ -55,7 +57,7 @@ def main():
     # Create tabs for different functionalities
     Tabs = st.tabs(["Chat", "Career Interest Assessment", "Skill Gap Analysis"])
 
-    # Chat tab content
+ # Chat tab content
     with Tabs[0]:
         # Initialize chat history in session state
         if "chat_history" not in st.session_state:
@@ -73,19 +75,21 @@ def main():
         # Input box and buttons at the bottom
         with st.container():
             input_field = st.text_input(
-                "",  # No label text to avoid duplication
+                "",  
                 key="input_box",
                 placeholder="Type your message...",
             )
             st.button("Send", on_click=handle_input)
             st.button("Clear Chat", on_click=clear_chat)
+                
     # Career Assessment Tab
     with Tabs[1]:
+        submitted = False
+
         st.title("Career Assessment")
         st.write("Answer these questions to discover your career interests and strengths.")
 
-        
-        # Display multiple-choice questions
+        # Define questions and options
         questions = [
         ("What activities or tasks make you feel most energized or excited?", [
             "Solving complex problems",
@@ -155,64 +159,88 @@ def main():
         ])
     ]
 
-        responses = []
-        # Iterate through each question
-        for i, (question, options) in enumerate(questions):
-            # Display the question
-            st.write(f"**{i + 1}. {question}**")
+        # Initialize session state for responses and submission lock
+        if "assessment_responses" not in st.session_state:
+            st.session_state.assessment_responses = [None] * len(questions)
+            st.session_state.submitted = False
 
-            # Use st.radio for the options, ensuring each question has a unique key
-            selected_option = st.radio(
+        # Input collection loop
+        for i, (question, options) in enumerate(questions):
+            st.write(f"**{i + 1}. {question}**")
+            st.session_state.assessment_responses[i] = st.radio(
                 label="",
                 options=options,
                 key=f"question_{i}",
+                index=options.index(st.session_state.assessment_responses[i])
+                if st.session_state.assessment_responses[i] else 0
             )
-
-            # Store the user's response
-            responses.append(selected_option)
-
+        
         # Reset button logic
-        if "assessment_responses" not in st.session_state:
-            st.session_state.assessment_responses = [None] * len(questions)
-
         def reset_assessment():
-            reset = True
             st.session_state.assessment_responses = [None] * len(questions)
+            st.session_state.submitted = False
 
-        if reset:
-            if st.button("Submit Assessment"):
+        # Submit button logic
+        def submit_assessment():
+            if all(st.session_state.assessment_responses):
+                st.session_state.submitted = True
+                submitted = True
+
                 # Display "Thinking..." message while processing
                 thinking_placeholder = st.empty()
                 thinking_placeholder.markdown("**Advisor:** Thinking... 🤔")
 
-                user_responses = "\n".join([f"{i + 1}. {response}" for i, response in enumerate(responses)])
-                system_prompt = """
-                You are an AI-powered career guidance assistant. Your task is to assess the user's career interests, 
-                strengths, and aspirations based on their responses to a set of questions. Based on this assessment, 
-                you will:
-                1. Analyze the user's strengths, interests, and work preferences.
-                2. Identify the user's character and suggest potential career paths that align with their strengths, 
-                interests, and long-term goals.
-                3. Provide tailored career advice that fits the user's aspirations and personality.
-                4. Address the user directly as "you" in the advice and recommendations.
-                """
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Here are the user's responses:\n{user_responses}"}
-                ]
-                response = client.chat.completions.create(
-                    model="gpt-4",
-                    messages=messages
+                user_responses = "\n".join(
+                    [f"{i + 1}. {response}" for i, response in enumerate(st.session_state.assessment_responses)]
+                )
+                # Define the system prompt concisely
+                system_prompt = (
+                    "You are a career guidance assistant. Analyze the user's responses about strengths, "
+                    "interests, and preferences. Suggest suitable career paths and provide concise, actionable advice."
                 )
 
-                # Replace "Thinking..." message with the AI's response
-                thinking_placeholder.empty()
-                st.write("**Career Interest Assessment Results:**")
-                st.write(response.choices[0].message.content)
+                # Construct the user responses string
+                user_responses = "\n".join(
+                    [f"{i + 1}. {response}" for i, response in enumerate(st.session_state.assessment_responses)]
+                )
 
-                # Reset button
-                if st.button("Reset Assessment"):
-                    reset_assessment()
+                # Build the messages list for the API
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_responses}
+                ]
+
+                # Simulate the API call
+                try:
+                    response = client.chat.completions.create(
+                        model="gpt-4",
+                        messages=messages,
+                        max_tokens=300,  # Limit the response length for efficiency
+                        temperature=0.7,  # Adjust creativity level as needed
+                    )
+
+                    # Replace "Thinking..." message with the AI's response
+                    thinking_placeholder.empty()
+
+                    # Extract and display the assistant's response
+                    ai_response = response.choices[0].message.content.strip()
+                    st.write("**Career Interest Assessment Results:**")
+                    st.write(ai_response)
+                    if st.button("Reset Assessment"):
+                        reset_assessment()
+
+                except Exception as e:
+                    st.error(f"An error occurred while processing your assessment: {e}")
+
+            else:
+                st.warning("Please answer all the questions before submitting.")
+
+        
+
+        # Buttons
+        if not submitted:
+            if st.button("Submit Assessment"):
+                submit_assessment()
             
 
     # Skill Gap Analysis Tab
@@ -227,28 +255,50 @@ def main():
         weaknesses = st.text_area("4. What are your weaknesses or areas where you feel you lack skills?")
 
         if st.button("Submit Skill Gap Analysis"):
-            # Process responses with AI
-            system_prompt = """
-            You are an AI-powered career guidance assistant. Your purpose is to analyze skill gaps and 
-            help users transition into their desired careers. Based on the user's highest education level, 
-            current skills, weaknesses, and career of interest, you will:
-            1. Identify the skills the user needs to acquire for the desired career.
-            2. Suggest relevant resources such as online courses, certifications, books, or tools to bridge the gap.
-            3. Provide a step-by-step roadmap to help the user achieve their career goals.
-            """
+
+            # Display "Thinking..." message while processing
+            thinking_placeholder = st.empty()
+            thinking_placeholder.markdown("**Advisor:** Thinking... 🤔")
+
+            # Optimized System Prompt
+            system_prompt = (
+                "You are a career guidance assistant. Analyze the user's education, skills, weaknesses, and career goal to:\n"
+                "1. List required skills for the target career.\n"
+                "2. Suggest 3 resources to bridge skill gaps.\n"
+                "3. Provide a concise 5-step career roadmap."
+            )
+
+            # Combine and optimize user input
+            user_input = (
+                f"Education: {education}. Career Interest: {career_interest}. "
+                f"Current Skills: {skills}. Weaknesses: {weaknesses}."
+            )
+
+            # Messages for the OpenAI API
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"My highest education level is: {education}.\n"
-                                            f"My career of interest is: {career_interest}.\n"
-                                            f"My current skills are: {skills}.\n"
-                                            f"My weaknesses are: {weaknesses}."}
+                {"role": "user", "content": user_input}
             ]
+
+            # Generate response
             response = client.chat.completions.create(
                 model="gpt-4",
-                messages=messages
+                messages=messages,
+                temperature=0.5,  # Adjust temperature for concise, deterministic output
+                max_tokens=500    # Limit output tokens for efficiency
             )
+
+            # Replace "Thinking..." message with the AI's response
+            thinking_placeholder.empty()
+
+            # Display results
             st.write("**Skill Gap Analysis Results:**")
             st.write(response.choices[0].message.content)
+            if(st.button("Reset Skill Gap Analysis")):
+                education = ""
+                career_interest = ""
+                skills = ""
+                weaknesses = ""
 
 def process_user_input(user_input):
     # Initialize the messages array if not already in session state
@@ -262,9 +312,11 @@ def process_user_input(user_input):
 
     # Make API call to OpenAI with the updated messages array
     response = client.chat.completions.create(
-        model="gpt-4",  
-        messages=st.session_state.messages
-    )
+            model="gpt-4",  
+            messages=st.session_state.messages,
+            temperature=0.5,  # Adjust temperature for more concise, deterministic responses
+            max_tokens=500    # Limit output tokens to prevent excessively long responses
+        )
 
     # Extract the advisor's response correctly
     ai_response = response.choices[0].message.content
